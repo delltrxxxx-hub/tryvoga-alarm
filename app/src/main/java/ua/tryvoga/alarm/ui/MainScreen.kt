@@ -142,7 +142,9 @@ fun MainScreen(vm: MainViewModel) {
     androidx.compose.runtime.LaunchedEffect(Unit) {
         if (SettingsRepo.settings.value.autoUpdate) ua.tryvoga.alarm.update.Updater.check(silent = true)
     }
-    UpdateDialogHost()
+    // Спершу — обов'язкові дозволи надійності, потім (якщо є) пропозиція оновлення.
+    val gateShown = PermissionsGate()
+    if (!gateShown) UpdateDialogHost()
 
     if (showLoc) {
         LocationSheet(loc, snap, settings.partialAs, onDismiss = { showLoc = false }) { l ->
