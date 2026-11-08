@@ -34,6 +34,8 @@ import androidx.compose.material.icons.rounded.Palette
 import androidx.compose.material.icons.rounded.Place
 import androidx.compose.material.icons.rounded.RecordVoiceOver
 import androidx.compose.material.icons.rounded.SystemUpdate
+import androidx.compose.material.icons.rounded.Widgets
+import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Warning
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -208,6 +210,28 @@ fun SettingsScreen(vm: MainViewModel, s: AppSettings, onRegion: () -> Unit) {
                     AlarmRepo.upsert(ctx, Alarm(id = AlarmRepo.newId(), hour = t.hour, minute = t.minute, label = "Тест"))
                     Toast.makeText(ctx, "Тестовий будильник на ${"%02d:%02d".format(t.hour, t.minute)}", Toast.LENGTH_SHORT).show()
                 }) {}
+            }
+        }
+
+        SectionTitle("Віджети на головний екран")
+        GlassSurface(Modifier.fillMaxWidth()) {
+            Column {
+                listOf(
+                    Triple(ua.tryvoga.alarm.widget.AlarmsListWidget::class.java, "Мої будильники", "Відлік до пробудження + список будильників"),
+                    Triple(ua.tryvoga.alarm.widget.CountdownWidget::class.java, "До пробудження", "Компактний відлік і статус тривоги"),
+                    Triple(ua.tryvoga.alarm.widget.DigitalClockWidget::class.java, "Годинник Liquid Glass", "Великий час, дата, відлік"),
+                    Triple(ua.tryvoga.alarm.widget.AnalogClockWidget::class.java, "Стрілочний годинник", "Циферблат, дата, відлік"),
+                ).forEachIndexed { i, (cls, title, sub) ->
+                    if (i > 0) HorizontalDivider(color = onBg().copy(alpha = 0.08f))
+                    SettingRow(Icons.Rounded.Widgets, title, sub, onClick = {
+                        val mgr = android.appwidget.AppWidgetManager.getInstance(ctx)
+                        if (Build.VERSION.SDK_INT >= 26 && mgr.isRequestPinAppWidgetSupported) {
+                            mgr.requestPinAppWidget(android.content.ComponentName(ctx, cls), null, null)
+                        } else {
+                            Toast.makeText(ctx, "Утримуйте палець на головному екрані → Віджети → Тривожний Будильник", Toast.LENGTH_LONG).show()
+                        }
+                    }) { Icon(Icons.Rounded.Add, "Додати", tint = androidx.compose.material3.MaterialTheme.colorScheme.primary) }
+                }
             }
         }
 
