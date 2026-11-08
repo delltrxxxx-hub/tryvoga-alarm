@@ -1,0 +1,16 @@
+# Gradle / Android Studio
+.gradle/
+build/
+app/build/
+.kotlin/
+.idea/
+*.iml
+local.properties
+captures/
+
+# Збірки та ключі — НІКОЛИ не комітити
+*.apk
+*.aab
+*.jks
+*.keystore
+keystore.properties

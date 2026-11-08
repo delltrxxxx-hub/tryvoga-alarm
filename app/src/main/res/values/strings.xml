@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Тривожний Будильник</string>
+    <string name="widget_digital">Годинник Liquid Glass</string>
+    <string name="widget_analog">Стрілочний годинник</string>
+    <string name="widget_desc">Час, відлік до пробудження та статус тривоги</string>
+    <string name="widget_next">До пробудження</string>
+    <string name="widget_alarms">Мої будильники</string>
+    <string name="widget_alarms_desc">Відлік до пробудження і список ваших будильників</string>
+    <string name="widget_countdown">До пробудження</string>
+    <string name="widget_countdown_desc">Компактний відлік до наступного будильника</string>
+</resources>

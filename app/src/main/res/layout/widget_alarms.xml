@@ -1,0 +1,104 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@drawable/widget_glass"
+    android:orientation="vertical"
+    android:padding="16dp">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center_vertical"
+        android:orientation="horizontal">
+
+        <ImageView
+            android:layout_width="16dp"
+            android:layout_height="16dp"
+            android:src="@drawable/ic_stat_alarm" />
+
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="6dp"
+            android:layout_weight="1"
+            android:text="@string/widget_next"
+            android:textColor="#CCFFFFFF"
+            android:textSize="13sp" />
+
+        <ImageView
+            android:id="@+id/alert_dot"
+            android:layout_width="8dp"
+            android:layout_height="8dp"
+            android:src="@drawable/dot" />
+
+        <TextView
+            android:id="@+id/alert_status"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="5dp"
+            android:maxLines="1"
+            android:maxWidth="150dp"
+            android:ellipsize="end"
+            android:textColor="#CCFFFFFF"
+            android:textSize="11sp" />
+    </LinearLayout>
+
+    <Chronometer
+        android:id="@+id/countdown"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:fontFamily="sans-serif-light"
+        android:includeFontPadding="false"
+        android:textColor="#FFFFFFFF"
+        android:textSize="40sp" />
+
+    <TextView
+        android:id="@+id/next_label"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:textColor="#B3FFFFFF"
+        android:textSize="13sp" />
+
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="1dp"
+        android:layout_marginTop="10dp"
+        android:layout_marginBottom="4dp"
+        android:background="#26FFFFFF" />
+
+    <TextView
+        android:id="@+id/empty"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="6dp"
+        android:text="Будильників немає — натисніть, щоб додати"
+        android:textColor="#B3FFFFFF"
+        android:textSize="13sp"
+        android:visibility="gone" />
+
+    <LinearLayout android:id="@+id/a1" android:layout_width="match_parent" android:layout_height="wrap_content" android:gravity="center_vertical" android:orientation="horizontal" android:paddingTop="4dp" android:paddingBottom="4dp">
+        <TextView android:id="@+id/a1_time" android:layout_width="wrap_content" android:layout_height="wrap_content" android:fontFamily="sans-serif-light" android:textColor="#FFFFFFFF" android:textSize="24sp" />
+        <TextView android:id="@+id/a1_days" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_marginStart="10dp" android:layout_weight="1" android:ellipsize="end" android:maxLines="1" android:textColor="#B3FFFFFF" android:textSize="12sp" />
+        <ImageView android:id="@+id/a1_dot" android:layout_width="10dp" android:layout_height="10dp" android:src="@drawable/dot" />
+    </LinearLayout>
+
+    <LinearLayout android:id="@+id/a2" android:layout_width="match_parent" android:layout_height="wrap_content" android:gravity="center_vertical" android:orientation="horizontal" android:paddingTop="4dp" android:paddingBottom="4dp">
+        <TextView android:id="@+id/a2_time" android:layout_width="wrap_content" android:layout_height="wrap_content" android:fontFamily="sans-serif-light" android:textColor="#FFFFFFFF" android:textSize="24sp" />
+        <TextView android:id="@+id/a2_days" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_marginStart="10dp" android:layout_weight="1" android:ellipsize="end" android:maxLines="1" android:textColor="#B3FFFFFF" android:textSize="12sp" />
+        <ImageView android:id="@+id/a2_dot" android:layout_width="10dp" android:layout_height="10dp" android:src="@drawable/dot" />
+    </LinearLayout>
+
+    <LinearLayout android:id="@+id/a3" android:layout_width="match_parent" android:layout_height="wrap_content" android:gravity="center_vertical" android:orientation="horizontal" android:paddingTop="4dp" android:paddingBottom="4dp">
+        <TextView android:id="@+id/a3_time" android:layout_width="wrap_content" android:layout_height="wrap_content" android:fontFamily="sans-serif-light" android:textColor="#FFFFFFFF" android:textSize="24sp" />
+        <TextView android:id="@+id/a3_days" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_marginStart="10dp" android:layout_weight="1" android:ellipsize="end" android:maxLines="1" android:textColor="#B3FFFFFF" android:textSize="12sp" />
+        <ImageView android:id="@+id/a3_dot" android:layout_width="10dp" android:layout_height="10dp" android:src="@drawable/dot" />
+    </LinearLayout>
+
+    <LinearLayout android:id="@+id/a4" android:layout_width="match_parent" android:layout_height="wrap_content" android:gravity="center_vertical" android:orientation="horizontal" android:paddingTop="4dp" android:paddingBottom="4dp">
+        <TextView android:id="@+id/a4_time" android:layout_width="wrap_content" android:layout_height="wrap_content" android:fontFamily="sans-serif-light" android:textColor="#FFFFFFFF" android:textSize="24sp" />
+        <TextView android:id="@+id/a4_days" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_marginStart="10dp" android:layout_weight="1" android:ellipsize="end" android:maxLines="1" android:textColor="#B3FFFFFF" android:textSize="12sp" />
+        <ImageView android:id="@+id/a4_dot" android:layout_width="10dp" android:layout_height="10dp" android:src="@drawable/dot" />
+    </LinearLayout>
+</LinearLayout>
