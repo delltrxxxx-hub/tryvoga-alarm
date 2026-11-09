@@ -186,7 +186,8 @@ class AlarmService : Service() {
             mode == MODE_AFTER_CLEAR -> "Відбій тривоги · ${region.short}"
             level.isAlert -> "${status.title} · ${region.short}"
             level == AlertLevel.UNKNOWN && alarm.alertAware -> "Статус тривоги невідомий"
-            else -> alarm.label.ifBlank { "Час прокидатися" }
+            alarm.alertAware -> "Тривоги немає · ${region.short}"
+            else -> "Час прокидатися"
         }
         val title = alarm.label.ifBlank { "Будильник" }
         val speech = if (alarm.announce) buildSpeech(alarm, status, region, mode) else null
