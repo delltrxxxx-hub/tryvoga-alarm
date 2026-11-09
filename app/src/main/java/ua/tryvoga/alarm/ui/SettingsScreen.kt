@@ -109,6 +109,15 @@ fun SettingsScreen(vm: MainViewModel, s: AppSettings, onRegion: () -> Unit) {
                         GlassSwitch(s.dynamicColor, { v -> update { it.copy(dynamicColor = v) } })
                     }
                 }
+                AnimatedVisibility(s.style == UiStyle.GLASS && Build.VERSION.SDK_INT >= 33) {
+                    Row(Modifier.padding(top = 12.dp), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                        Column(Modifier.weight(1f).padding(end = 8.dp)) {
+                            Text("Справжнє рідке скло", color = onBg())
+                            Text("Розмиття й заломлення під нижньою панеллю. Вимикається саме, якщо телефон не встигає.", color = dimText(), fontSize = 13.sp)
+                        }
+                        GlassSwitch(s.liquidFx, { v -> update { it.copy(liquidFx = v) } })
+                    }
+                }
             }
         }
 

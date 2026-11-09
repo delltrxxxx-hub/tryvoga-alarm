@@ -13,7 +13,10 @@ import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import dev.chrisbanes.haze.glass.hazeGlass
+import kotlinx.coroutines.launch
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -112,7 +115,7 @@ fun MainScreen(vm: MainViewModel) {
     val ctx = LocalContext.current
 
     AppBackground(status.shownLevel) {
-        Column(Modifier.fillMaxSize().statusBarsPadding()) {
+        Column(Modifier.fillMaxSize().liquidSource().statusBarsPadding()) {
             Header(loc, status, alarms) { showLoc = true }
             Box(Modifier.weight(1f)) {
                 AnimatedContent(
@@ -163,7 +166,7 @@ private fun Header(loc: Loc, status: LocStatus, alarms: List<Alarm>, onLoc: () -
     val next = AlarmScheduler.nextAlarm(alarms, now)
     val shown = status.shownLevel
     Column(Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 6.dp, start = 16.dp, end = 16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-        GlassSurface(Modifier.widthIn(max = 340.dp), shape = RoundedCornerShape(16.dp), tint = if (shown.isAlert) shown.color() else Color.Unspecified, onClick = onLoc) {
+        GlassSurface(Modifier.widthIn(max = 340.dp), shape = RoundedCornerShape(50), tint = if (shown.isAlert) shown.color() else Color.Unspecified, onClick = onLoc) {
             Row(Modifier.padding(start = 6.dp, end = 10.dp, top = 6.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
                 StatusDot(shown, 8.dp)
                 Icon(Icons.Rounded.Place, null, tint = onBg(), modifier = Modifier.size(16.dp))
@@ -185,6 +188,7 @@ private fun Header(loc: Loc, status: LocStatus, alarms: List<Alarm>, onLoc: () -
 @Composable
 private fun BottomNav(tab: Tab, onTab: (Tab) -> Unit, modifier: Modifier) {
     val items = Tab.entries
+    if (LocalUiStyle.current == UiStyle.GLASS) { LiquidBottomNav(items, tab, onTab, modifier); return }
     GlassSurface(
         modifier.navigationBarsPadding().padding(horizontal = 10.dp, vertical = 10.dp).fillMaxWidth().height(70.dp),
         shape = RoundedCornerShape(24.dp)
@@ -222,6 +226,113 @@ private fun BottomNav(tab: Tab, onTab: (Tab) -> Unit, modifier: Modifier) {
             }
         }
     }
+}
+
+/**
+ * Нижня панель у Liquid Glass: плаваюча капсула зі справжнього скла (розмиття + заломлення
+ * того, що прокручується під нею). Вибрана вкладка — «крапля»: при переході передній край
+ * біжить швидше за задній, крапля розтягується і пружно стягується на місці.
+ */
+@Composable
+private fun LiquidBottomNav(items: List<Tab>, tab: Tab, onTab: (Tab) -> Unit, modifier: Modifier) {
+    val dark = LocalIsDark.current
+    val ctx = LocalContext.current
+    val settings by SettingsRepo.settings.collectAsState()
+    // шейдерне скло — лише на справжніх пристроях з Android 13+ і якщо не вимкнене
+    val fxAllowed = settings.liquidFx && android.os.Build.VERSION.SDK_INT >= 33 && !isEmulator()
+    val haze = LocalHazeState.current?.takeIf { fxAllowed }
+    if (haze != null) {
+        // запобіжник: якщо перші кадри малюються повільно — вимикаємо ефект назавжди
+        androidx.compose.runtime.LaunchedEffect(Unit) {
+            var last = 0L
+            var slow = 0
+            repeat(24) {
+                androidx.compose.runtime.withFrameNanos { t ->
+                    if (last != 0L && t - last > 100_000_000L) slow++
+                    last = t
+                }
+            }
+            if (slow >= 3) SettingsRepo.update(ctx) { it.copy(liquidFx = false) }
+        }
+    }
+    val pill = RoundedCornerShape(50)
+    val rim = androidx.compose.ui.graphics.Brush.linearGradient(
+        0f to Color.White.copy(alpha = if (dark) 0.7f else 1f),
+        0.4f to Color.White.copy(alpha = if (dark) 0.10f else 0.35f),
+        1f to Color.White.copy(alpha = if (dark) 0.35f else 0.8f),
+    )
+    val glassBg = MaterialTheme.colorScheme.background.copy(alpha = if (dark) 0.35f else 0.45f)
+    val glassMod = if (haze != null) {
+        Modifier.hazeGlass(
+            input = dev.chrisbanes.haze.HazeInput.Sources(haze),
+            performanceMode = dev.chrisbanes.haze.HazePerformanceMode.Performance,
+            style = dev.chrisbanes.haze.glass.GlassStyle {
+                shape(pill)
+                tint(if (dark) Color.White.copy(alpha = 0.06f) else Color.White.copy(alpha = 0.35f))
+                backgroundColor(glassBg)
+                specularIntensity(0.6f)
+            }
+        )
+    } else Modifier.background(MaterialTheme.colorScheme.background.copy(alpha = 0.95f))
+
+    Box(
+        modifier.navigationBarsPadding().padding(horizontal = 14.dp, vertical = 12.dp).fillMaxWidth().height(68.dp)
+            .clip(pill).then(glassMod).border(1.2.dp, rim, pill)
+    ) {
+        BoxWithConstraints(Modifier.fillMaxSize().padding(5.dp)) {
+            val w = maxWidth / items.size
+            val index = tab.ordinal
+            val left = remember { androidx.compose.animation.core.Animatable(index.toFloat()) }
+            val right = remember { androidx.compose.animation.core.Animatable(index + 1f) }
+            androidx.compose.runtime.LaunchedEffect(index) {
+                val toRight = index > left.value
+                // передній край швидкий, задній — повільний: крапля тягнеться і наздоганяє
+                launch { left.animateTo(index.toFloat(), spring(dampingRatio = 0.68f, stiffness = if (toRight) 220f else 900f)) }
+                launch { right.animateTo(index + 1f, spring(dampingRatio = 0.68f, stiffness = if (toRight) 900f else 220f)) }
+            }
+            val dropRim = androidx.compose.ui.graphics.Brush.verticalGradient(
+                listOf(Color.White.copy(alpha = if (dark) 0.55f else 1f), Color.White.copy(alpha = if (dark) 0.12f else 0.5f))
+            )
+            Box(
+                Modifier.offset(x = w * left.value).width(w * (right.value - left.value)).fillMaxHeight()
+                    .clip(pill)
+                    .background(
+                        androidx.compose.ui.graphics.Brush.verticalGradient(
+                            if (dark) listOf(Color.White.copy(alpha = 0.26f), Color.White.copy(alpha = 0.12f))
+                            else listOf(Color.White.copy(alpha = 0.95f), Color.White.copy(alpha = 0.65f))
+                        )
+                    )
+                    .border(1.dp, dropRim, pill)
+            )
+            Row(Modifier.fillMaxSize()) {
+                items.forEach { t ->
+                    val sel = t == tab
+                    val sc by animateFloatAsState(if (sel) 1.12f else 1f, bouncy(), label = "ic")
+                    val c by animateColorAsState(if (sel) MaterialTheme.colorScheme.primary else onBg().copy(alpha = 0.72f), label = "nc")
+                    Column(
+                        Modifier.weight(1f).fillMaxHeight()
+                            .clickable(remember { MutableInteractionSource() }, null) { onTab(t) }
+                            .padding(horizontal = 2.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center
+                    ) {
+                        Icon(t.icon, t.label, tint = c, modifier = Modifier.padding(bottom = 3.dp).size(22.dp).graphicsLayer { scaleX = sc; scaleY = sc })
+                        BasicText(
+                            t.label, maxLines = 1,
+                            style = TextStyle(color = c, fontWeight = if (sel) FontWeight.SemiBold else FontWeight.Medium, textAlign = TextAlign.Center),
+                            autoSize = TextAutoSize.StepBased(minFontSize = 7.sp, maxFontSize = 11.sp, stepSize = 0.5.sp)
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+/** Емулятори малюють шейдери програмно — там ефект скла вимкнено. */
+fun isEmulator(): Boolean {
+    val b = android.os.Build.FINGERPRINT + android.os.Build.HARDWARE + android.os.Build.PRODUCT
+    return b.contains("generic") || b.contains("ranchu") || b.contains("goldfish") || b.contains("sdk_gphone") || b.contains("emulator")
 }
 
 @Composable

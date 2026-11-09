@@ -49,6 +49,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithContent
+import dev.chrisbanes.haze.hazeSource
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -66,8 +68,15 @@ import ua.tryvoga.alarm.UiStyle
 import kotlin.math.cos
 import kotlin.math.sin
 
-/** Пружина «як у фізиці» — використовується для всіх інтерактивних анімацій. */
-fun <T> bouncy() = spring<T>(dampingRatio = 0.75f, stiffness = Spring.StiffnessMediumLow)
+/** Пружина «як рідина» — використовується для всіх інтерактивних анімацій. */
+fun <T> bouncy() = spring<T>(dampingRatio = 0.62f, stiffness = Spring.StiffnessMediumLow)
+
+/**
+ * Джерело для справжнього «рідкого скла» (розмиття + заломлення того, що під панеллю).
+ * Задається фоном у режимі Liquid Glass; ефект застосовують лише елементи поза джерелом
+ * (нижня панель), щоб скло не розмивало саме себе.
+ */
+val LocalHazeState = androidx.compose.runtime.staticCompositionLocalOf<dev.chrisbanes.haze.HazeState?> { null }
 fun <T> soft() = spring<T>(dampingRatio = 0.8f, stiffness = Spring.StiffnessLow)
 
 @Composable
@@ -81,11 +90,13 @@ fun dimText(): Color = MaterialTheme.colorScheme.onSurfaceVariant
 fun AppBackground(level: AlertLevel, content: @Composable BoxScope.() -> Unit) {
     val style = LocalUiStyle.current
     val dark = LocalIsDark.current
+    val haze = if (style == UiStyle.GLASS) dev.chrisbanes.haze.rememberHazeState() else null
     Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
         if (style == UiStyle.GLASS) {
             val t = rememberInfiniteTransition(label = "bg")
-            val phase by t.animateFloat(0f, (2 * Math.PI).toFloat(), infiniteRepeatable(tween(40000, easing = androidx.compose.animation.core.LinearEasing)), label = "p")
-            val pulse by t.animateFloat(0.6f, 1f, infiniteRepeatable(tween(1600, easing = FastOutSlowInEasing), RepeatMode.Reverse), label = "pulse")
+            // фон нерухомий: «рідке скло» панелі перераховується лише коли щось справді змінилось (економія батареї й GPU)
+            val phase = 0.9f
+            val pulse = 0.85f
             val alertColor by animateColorAsState(
                 when (level) {
                     AlertLevel.RED -> AlertRed
@@ -98,7 +109,7 @@ fun AppBackground(level: AlertLevel, content: @Composable BoxScope.() -> Unit) {
             val blobs = if (dark) listOf(Color(0xFF3B5BFF), Color(0xFF6E5BE0), Color(0xFF1FA2B8), Color(0xFF4057C8))
             else listOf(Color(0xFF8FAEFF), Color(0xFFB9A8F2), Color(0xFF9ADDE6), Color(0xFFA9B8F0))
             val a = if (dark) 0.36f else 0.42f
-            Canvas(Modifier.fillMaxSize()) {
+            Canvas(Modifier.fillMaxSize().then(if (haze != null) Modifier.hazeSource(haze, zIndex = 0f) else Modifier)) {
                 drawRect(Brush.linearGradient(base, Offset.Zero, Offset(size.width, size.height)))
                 val w = size.width; val h = size.height
                 val pts = listOf(
@@ -123,15 +134,23 @@ fun AppBackground(level: AlertLevel, content: @Composable BoxScope.() -> Unit) {
                     .background(Brush.verticalGradient(listOf(level.color().copy(alpha = 0.18f), Color.Transparent)))
             )
         }
-        content()
+        val scope = this
+        androidx.compose.runtime.CompositionLocalProvider(LocalHazeState provides haze) { scope.content() }
     }
+}
+
+/** Позначити вміст як те, що видно крізь «рідке скло» нижньої панелі. */
+@Composable
+fun Modifier.liquidSource(): Modifier {
+    val h = LocalHazeState.current ?: return this
+    return this.hazeSource(h, zIndex = 1f)
 }
 
 /** Скляна панель: напівпрозора заливка + світлий градієнтний кант + пружне натискання. */
 @Composable
 fun GlassSurface(
     modifier: Modifier = Modifier,
-    shape: Shape = RoundedCornerShape(22.dp),
+    shape: Shape = RoundedCornerShape(28.dp),
     tint: Color = Color.Unspecified,
     onClick: (() -> Unit)? = null,
     content: @Composable BoxScope.() -> Unit,
@@ -140,21 +159,27 @@ fun GlassSurface(
     val dark = LocalIsDark.current
     val interaction = remember { MutableInteractionSource() }
     val pressed by interaction.collectIsPressedAsState()
-    val scale by animateFloatAsState(if (pressed) 0.98f else 1f, spring(dampingRatio = 0.75f, stiffness = 600f), label = "press")
+    // «рідке» натискання: м'яко просідає й пружно повертається
+    val scale by animateFloatAsState(if (pressed) 0.965f else 1f, spring(dampingRatio = 0.55f, stiffness = 520f), label = "press")
     var m = modifier.graphicsLayer { scaleX = scale; scaleY = scale }.clip(shape)
     m = if (style == UiStyle.GLASS) {
-        val fill = if (dark) Brush.linearGradient(listOf(Color.White.copy(alpha = 0.17f), Color.White.copy(alpha = 0.06f)))
-        else Brush.linearGradient(listOf(Color.White.copy(alpha = 0.78f), Color.White.copy(alpha = 0.42f)))
-        val border = Brush.linearGradient(
-            listOf(
-                Color.White.copy(alpha = if (dark) 0.5f else 1f),
-                Color.White.copy(alpha = if (dark) 0.06f else 0.35f),
-                Color.White.copy(alpha = if (dark) 0.25f else 0.7f),
-            )
+        val fill = if (dark) Brush.linearGradient(listOf(Color.White.copy(alpha = 0.15f), Color.White.copy(alpha = 0.05f)))
+        else Brush.linearGradient(listOf(Color.White.copy(alpha = 0.72f), Color.White.copy(alpha = 0.38f)))
+        // кант як у скла iPhone: яскравий зверху-зліва, майже зникає по боках, відблиск знизу-справа
+        val rim = Brush.linearGradient(
+            0f to Color.White.copy(alpha = if (dark) 0.62f else 1f),
+            0.35f to Color.White.copy(alpha = if (dark) 0.08f else 0.3f),
+            0.7f to Color.White.copy(alpha = if (dark) 0.04f else 0.2f),
+            1f to Color.White.copy(alpha = if (dark) 0.32f else 0.75f),
         )
         m.background(fill)
             .then(if (tint.isSpecified) Modifier.background(tint.copy(alpha = 0.16f)) else Modifier)
-            .border(1.dp, border, shape)
+            .drawWithContent {
+                // внутрішнє світло: верхня третина трохи світліша — об'єм краплі
+                drawRect(Brush.verticalGradient(0f to Color.White.copy(alpha = if (dark) 0.10f else 0.35f), 0.45f to Color.Transparent))
+                drawContent()
+            }
+            .border(1.2.dp, rim, shape)
     } else {
         val base = MaterialTheme.colorScheme.surfaceContainerHigh
         m.background(if (tint.isSpecified) tint.copy(alpha = 0.16f).compositeOver(base) else base)
@@ -176,7 +201,7 @@ fun GlassButton(
     val accent = if (color.isSpecified) color else MaterialTheme.colorScheme.primary
     GlassSurface(
         modifier.height(52.dp).graphicsLayer { alpha = if (enabled) 1f else 0.45f },
-        shape = RoundedCornerShape(16.dp),
+        shape = RoundedCornerShape(26.dp),
         tint = if (primary) accent else Color.Unspecified,
         onClick = if (enabled) onClick else null,
     ) {
@@ -197,18 +222,18 @@ fun SectionTitle(text: String, modifier: Modifier = Modifier) {
 /** Сегментований перемикач з «капсулою», що перескакує на пружині. */
 @Composable
 fun <T> Segmented(options: List<T>, selected: T, label: (T) -> String, onSelect: (T) -> Unit, modifier: Modifier = Modifier) {
-    GlassSurface(modifier.fillMaxWidth().height(46.dp), shape = RoundedCornerShape(14.dp)) {
+    GlassSurface(modifier.fillMaxWidth().height(46.dp), shape = RoundedCornerShape(23.dp)) {
         BoxWithConstraints(Modifier.fillMaxSize().padding(4.dp)) {
             val w: Dp = maxWidth / options.size
             val idx = options.indexOf(selected).coerceAtLeast(0)
-            val off by animateDpAsState(w * idx, spring(dampingRatio = 0.85f, stiffness = Spring.StiffnessMediumLow), label = "seg")
-            Box(Modifier.offset(x = off).width(w).fillMaxHeight().clip(RoundedCornerShape(10.dp)).background(MaterialTheme.colorScheme.primary))
+            val off by animateDpAsState(w * idx, spring(dampingRatio = 0.62f, stiffness = Spring.StiffnessMediumLow), label = "seg")
+            Box(Modifier.offset(x = off).width(w).fillMaxHeight().clip(RoundedCornerShape(19.dp)).background(MaterialTheme.colorScheme.primary))
             Row(Modifier.fillMaxSize()) {
                 options.forEach { o ->
                     val sel = o == selected
                     val fg by animateColorAsState(if (sel) MaterialTheme.colorScheme.onPrimary else onBg(), label = "fg")
                     Box(
-                        Modifier.weight(1f).fillMaxHeight().clip(RoundedCornerShape(10.dp)).clickable { onSelect(o) },
+                        Modifier.weight(1f).fillMaxHeight().clip(RoundedCornerShape(19.dp)).clickable { onSelect(o) },
                         contentAlignment = Alignment.Center
                     ) {
                         androidx.compose.foundation.text.BasicText(
@@ -236,8 +261,8 @@ fun <T> ChoicePills(options: List<T>, selected: T, label: (T) -> String, onSelec
         options.forEach { o ->
             val sel = o == selected
             val bg by animateColorAsState(if (sel) accent else Color.Transparent, label = "pill")
-            val sc by animateFloatAsState(1f, bouncy(), label = "ps")
-            GlassSurface(Modifier.graphicsLayer { scaleX = sc; scaleY = sc }, shape = RoundedCornerShape(12.dp), onClick = { onSelect(o) }) {
+            val sc by animateFloatAsState(if (sel) 1.05f else 1f, bouncy(), label = "ps")
+            GlassSurface(Modifier.graphicsLayer { scaleX = sc; scaleY = sc }, shape = RoundedCornerShape(50), onClick = { onSelect(o) }) {
                 Box(Modifier.background(bg).padding(horizontal = 14.dp, vertical = 9.dp)) {
                     Text(label(o), color = if (sel) Color.White else onBg(), fontSize = 14.sp, fontWeight = FontWeight.Medium)
                 }

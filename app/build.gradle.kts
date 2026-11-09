@@ -13,8 +13,8 @@ android {
         applicationId = "ua.tryvoga.alarm"
         minSdk = 26
         targetSdk = 36
-        versionCode = 7
-        versionName = "1.5.1"
+        versionCode = 8
+        versionName = "1.6"
         // Репозиторій, з якого застосунок бере оновлення (GitHub Releases).
         buildConfigField("String", "UPDATE_REPO", "\"delltrxxxx-hub/tryvoga-alarm\"")
     }
@@ -51,6 +51,7 @@ dependencies {
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.compose.material3)
     implementation(libs.androidx.compose.material.icons.extended)
+    implementation(libs.haze.glass)
     implementation(libs.androidx.compose.ui)
     implementation(libs.androidx.compose.ui.graphics)
     implementation(libs.androidx.compose.ui.tooling.preview)

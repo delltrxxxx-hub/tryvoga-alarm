@@ -79,6 +79,7 @@ object SettingsRepo {
             partialAs = runCatching { AlertLevel.valueOf(prefs.getString("partial2", d.partialAs.name)!!) }.getOrDefault(d.partialAs),
             worldZones = prefs.getString("zones", null)?.split(",")?.filter { it.isNotBlank() } ?: d.worldZones,
             autoUpdate = prefs.getBoolean("autoUpdate", d.autoUpdate),
+            liquidFx = prefs.getBoolean("liquidFx", d.liquidFx),
         )
     }
 
@@ -94,6 +95,7 @@ object SettingsRepo {
             .putString("partial2", s.partialAs.name)
             .putString("zones", s.worldZones.joinToString(","))
             .putBoolean("autoUpdate", s.autoUpdate)
+            .putBoolean("liquidFx", s.liquidFx)
             .apply()
         WidgetUpdater.update(ctx)
     }

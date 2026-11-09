@@ -129,6 +129,8 @@ data class AppSettings(
     val worldZones: List<String> = listOf("Europe/London", "America/New_York", "Asia/Tokyo"),
     /** Перевіряти оновлення на GitHub при кожному запуску. */
     val autoUpdate: Boolean = true,
+    /** Справжнє «рідке скло» (розмиття й заломлення) під нижньою панеллю. Вимикається саме, якщо телефон не тягне. */
+    val liquidFx: Boolean = true,
 )
 
 fun formatCountdown(ms: Long): String {
