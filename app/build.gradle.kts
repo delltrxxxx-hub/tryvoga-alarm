@@ -13,8 +13,8 @@ android {
         applicationId = "ua.tryvoga.alarm"
         minSdk = 26
         targetSdk = 36
-        versionCode = 8
-        versionName = "1.6"
+        versionCode = 9
+        versionName = "1.6.1"
         // Репозиторій, з якого застосунок бере оновлення (GitHub Releases).
         buildConfigField("String", "UPDATE_REPO", "\"delltrxxxx-hub/tryvoga-alarm\"")
     }

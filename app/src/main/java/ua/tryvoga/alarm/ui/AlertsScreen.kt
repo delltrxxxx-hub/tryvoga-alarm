@@ -248,8 +248,9 @@ private fun OblastCard(o: Loc, snap: Snapshot?, myLoc: Loc, onClose: () -> Unit,
     val (own, part) = snap?.oblastFill(o.id) ?: (AlertLevel.UNKNOWN to AlertLevel.NONE)
     val lvl = if (own.isAlert) own else part
     GlassSurface(Modifier.fillMaxWidth().padding(8.dp), tint = if (lvl.isAlert) lvl.color() else Color.Unspecified) {
-        Box(Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.background.copy(alpha = 0.55f)))
-        Column(Modifier.padding(14.dp).heightIn(max = 260.dp).verticalScroll(rememberScrollState())) {
+        // Щільна підкладка: карта під карткою не має просвічувати, інакше текст зливається.
+        val panel = if (LocalIsDark.current) Color(0xFF111118).copy(alpha = 0.94f) else Color.White.copy(alpha = 0.96f)
+        Column(Modifier.fillMaxWidth().background(panel).padding(14.dp).heightIn(max = 260.dp).verticalScroll(rememberScrollState())) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 StatusDot(if (lvl.isAlert) lvl else own, 7.dp)
                 Spacer(Modifier.width(6.dp))
