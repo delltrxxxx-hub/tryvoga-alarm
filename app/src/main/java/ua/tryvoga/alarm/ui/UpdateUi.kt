@@ -44,8 +44,10 @@ fun UpdateDialogHost() {
     val info: UpdateInfo = when (val s = st) {
         is UpdateState.Available -> s.info
         is UpdateState.Downloading -> s.info
+        is UpdateState.Error -> s.info ?: return
         else -> return
     }
+    val error = (st as? UpdateState.Error)?.message
     val ctx = LocalContext.current
     val scope = rememberCoroutineScope()
     val downloading = st as? UpdateState.Downloading
@@ -76,10 +78,13 @@ fun UpdateDialogHost() {
                     Spacer(Modifier.height(8.dp))
                     Text("Завантаження… ${(progress * 100).toInt()}%", color = dimText(), fontSize = 13.sp)
                 } else {
+                    if (error != null) {
+                        Text(error, color = AlertRed, fontSize = 13.sp, modifier = Modifier.fillMaxWidth().padding(bottom = 10.dp))
+                    }
                     Row {
                         GlassButton("Пізніше", { Updater.dismiss() }, Modifier.weight(1f))
                         Spacer(Modifier.width(10.dp))
-                        GlassButton("Оновити", {
+                        GlassButton(if (error != null) "Ще раз" else "Оновити", {
                             if (!Updater.canInstall(ctx)) Updater.openInstallPermission(ctx)
                             else scope.launch { Updater.downloadAndInstall(ctx.applicationContext, info) }
                         }, Modifier.weight(1f), Icons.Rounded.SystemUpdate, primary = true)

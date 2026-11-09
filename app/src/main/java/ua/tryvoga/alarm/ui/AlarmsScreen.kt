@@ -31,12 +31,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.foundation.border
-import androidx.compose.ui.graphics.drawscope.rotate
-import androidx.compose.ui.text.drawText
-import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.semantics
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -86,43 +80,19 @@ import ua.tryvoga.alarm.DAY_SHORT
 import ua.tryvoga.alarm.formatCountdown
 
 @Composable
-fun AlarmsScreen(alarms: List<Alarm>, level: ua.tryvoga.alarm.AlertLevel = ua.tryvoga.alarm.AlertLevel.UNKNOWN, onRingCollapsed: (Boolean) -> Unit = {}) {
+fun AlarmsScreen(alarms: List<Alarm>) {
     val ctx = LocalContext.current
     var editing by remember { mutableStateOf<Alarm?>(null) }
     var isNew by remember { mutableStateOf(false) }
-    val glass = isGlass()
-    val listState = androidx.compose.foundation.lazy.rememberLazyListState()
-    val density = androidx.compose.ui.platform.LocalDensity.current
-    val collapsed by remember {
-        androidx.compose.runtime.derivedStateOf {
-            listState.firstVisibleItemIndex > 0 || listState.firstVisibleItemScrollOffset > with(density) { 24.dp.toPx() }
-        }
-    }
-    androidx.compose.runtime.LaunchedEffect(collapsed, glass) { onRingCollapsed(glass && collapsed) }
-    androidx.compose.runtime.DisposableEffect(Unit) { onDispose { onRingCollapsed(false) } }
-    val openNew = { editing = Alarm(id = AlarmRepo.newId(), hour = 7, minute = 0); isNew = true }
 
     Box(Modifier.fillMaxSize()) {
         LazyColumn(
-            state = listState,
             contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 190.dp),
-            verticalArrangement = Arrangement.spacedBy(if (glass) 0.dp else 12.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
             modifier = Modifier.fillMaxSize()
         ) {
-            if (glass) item(key = "ring") {
-                WakeRing(alarms, level, Modifier.fillMaxWidth().padding(top = 4.dp, bottom = 20.dp))
-            }
             if (alarms.isEmpty()) item {
-                if (glass) {
-                    Column(Modifier.fillMaxWidth().padding(horizontal = 24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text("Будильників немає", color = onBg(), fontSize = 17.sp, fontWeight = FontWeight.Medium)
-                        Text(
-                            "Додайте перший — і вкажіть, як йому поводитися під час тривоги.",
-                            color = dimText(), fontSize = 14.sp, textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-                            modifier = Modifier.padding(top = 4.dp)
-                        )
-                    }
-                } else GlassSurface(Modifier.fillMaxWidth()) {
+                GlassSurface(Modifier.fillMaxWidth()) {
                     Column(Modifier.padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                         Icon(Icons.Rounded.AlarmOn, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(48.dp))
                         Spacer(Modifier.height(8.dp))
@@ -131,31 +101,17 @@ fun AlarmsScreen(alarms: List<Alarm>, level: ua.tryvoga.alarm.AlertLevel = ua.tr
                     }
                 }
             }
-            itemsIndexed(alarms, key = { _, a -> a.id }) { i, a ->
-                val onToggle = { on: Boolean ->
+            items(alarms, key = { it.id }) { a ->
+                AlarmCard(a, Modifier.animateItem(), onToggle = { on ->
                     AlarmRepo.upsert(ctx, a.copy(enabled = on))
                     if (on) Toast.makeText(ctx, "Задзвонить через ${formatCountdown(a.nextTriggerMillis() - System.currentTimeMillis())}", Toast.LENGTH_SHORT).show()
-                }
-                if (glass) AlarmRow(a, i, alarms.size, Modifier.animateItem(), onToggle) { editing = a; isNew = false }
-                else AlarmCard(a, Modifier.animateItem(), onToggle = onToggle) { editing = a; isNew = false }
+                }) { editing = a; isNew = false }
             }
         }
-        if (glass) {
-            // «+»: один стиль — контурне коло 1.5dp, як лінії циферблата
-            val interaction = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
-            Box(
-                Modifier.align(Alignment.BottomEnd).padding(end = 20.dp, bottom = 100.dp).size(56.dp).clip(CircleShape)
-                    .background(MaterialTheme.colorScheme.background)
-                    .border(1.5.dp, onBg().copy(alpha = 0.6f), CircleShape)
-                    .clickable(interaction, androidx.compose.foundation.LocalIndication.current) { openNew() },
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(Icons.Rounded.Add, "Новий будильник", tint = onBg(), modifier = Modifier.size(26.dp))
-            }
-        } else GlassSurface(
+        GlassSurface(
             Modifier.align(Alignment.BottomEnd).padding(end = 22.dp, bottom = 104.dp).size(64.dp),
             shape = CircleShape, tint = MaterialTheme.colorScheme.primary,
-            onClick = openNew
+            onClick = { editing = Alarm(id = AlarmRepo.newId(), hour = 7, minute = 0); isNew = true }
         ) {
             Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.primary.copy(alpha = 0.6f)), contentAlignment = Alignment.Center) {
                 Icon(Icons.Rounded.Add, "Додати", tint = Color.White, modifier = Modifier.size(32.dp))
@@ -175,129 +131,6 @@ fun AlarmsScreen(alarms: List<Alarm>, level: ua.tryvoga.alarm.AlertLevel = ua.tr
             },
             onDelete = { AlarmRepo.delete(ctx, a.id); editing = null }
         )
-    }
-}
-
-/**
- * Кільце «до пробудження» — головне на екрані. Циферблат на 24 години: дуга від «зараз»
- * до наступного будильника, у центрі — скільки лишилось. Дуга «доростає» за 300 мс.
- */
-@Composable
-private fun WakeRing(alarms: List<Alarm>, level: ua.tryvoga.alarm.AlertLevel, modifier: Modifier) {
-    val now by androidx.compose.runtime.produceState(System.currentTimeMillis()) {
-        while (true) { value = System.currentTimeMillis(); kotlinx.coroutines.delay(1000) }
-    }
-    val next = ua.tryvoga.alarm.AlarmScheduler.nextAlarm(alarms, now)
-    val remaining = next?.let { it.first - now } ?: 0L
-    val zone = java.time.ZoneId.systemDefault()
-    val nowT = java.time.Instant.ofEpochMilli(now).atZone(zone)
-    val startDeg = ((nowT.hour * 60 + nowT.minute) / 1440f) * 360f
-    // мінімум 6°, щоб коротка дуга не виглядала як збій
-    val targetSweep = if (next != null) ((remaining / 86_400_000f) * 360f).coerceIn(6f, 360f) else 0f
-    val sweep = remember { androidx.compose.animation.core.Animatable(0f) }
-    var growing by remember { mutableStateOf(false) }
-    androidx.compose.runtime.LaunchedEffect((targetSweep / 2f).toInt()) {
-        // крок дуги з тіком на кожні ~2°; великі зміни (новий будильник) — плавно 300 мс
-        if (kotlin.math.abs(sweep.value - targetSweep) > 3f) {
-            growing = true
-            sweep.animateTo(targetSweep, androidx.compose.animation.core.tween(300, easing = androidx.compose.animation.core.FastOutSlowInEasing))
-            growing = false
-        } else sweep.snapTo(targetSweep)
-    }
-    val fg = onBg()
-    val track = onBg().copy(alpha = 0.20f)
-    val tick = onBg().copy(alpha = 0.38f)
-    val h = remaining / 3_600_000
-    val m = (remaining / 60_000) % 60
-    val desc = if (next != null) "До пробудження $h ${ua.tryvoga.alarm.plural(h.toInt(), "година", "години", "годин")} $m ${ua.tryvoga.alarm.plural(m.toInt(), "хвилина", "хвилини", "хвилин")}"
-    else if (alarms.isEmpty()) "Будильників немає" else "Усі будильники вимкнені"
-
-    val measurer = androidx.compose.ui.text.rememberTextMeasurer()
-    val labelStyle = androidx.compose.ui.text.TextStyle(color = onBg().copy(alpha = 0.5f), fontSize = 11.sp)
-    Box(modifier.semantics(mergeDescendants = true) { contentDescription = desc }, contentAlignment = Alignment.Center) {
-        androidx.compose.foundation.Canvas(Modifier.size(196.dp)) {
-            // підписи годин 0 / 6 / 12 / 18 — щоб циферблат читався як доба
-            val rl = size.minDimension / 2 - 2.dp.toPx()
-            val cc = androidx.compose.ui.geometry.Offset(size.width / 2, size.height / 2)
-            listOf(0 to "0", 6 to "6", 12 to "12", 18 to "18").forEach { (hr, s) ->
-                val lay = measurer.measure(s, labelStyle)
-                val ang = Math.toRadians((hr * 15f - 90f).toDouble())
-                val px = cc.x + (rl - lay.size.width / 2f) * kotlin.math.cos(ang).toFloat() - lay.size.width / 2f
-                val py = cc.y + (rl - lay.size.height / 2f) * kotlin.math.sin(ang).toFloat() - lay.size.height / 2f
-                drawText(lay, topLeft = androidx.compose.ui.geometry.Offset(px, py))
-            }
-        }
-        androidx.compose.foundation.Canvas(Modifier.size(168.dp)) {
-            val stroke = 4.dp.toPx()
-            val r = size.minDimension / 2 - stroke
-            val c = androidx.compose.ui.geometry.Offset(size.width / 2, size.height / 2)
-            // години: 24 риски, кожна шоста — довша (0, 6, 12, 18)
-            for (i in 0 until 24) {
-                val major = i % 6 == 0
-                rotate(i * 15f, c) {
-                    drawLine(tick, androidx.compose.ui.geometry.Offset(c.x, c.y - r + stroke * 1.6f),
-                        androidx.compose.ui.geometry.Offset(c.x, c.y - r + stroke * (if (major) 3.6f else 2.4f)),
-                        strokeWidth = if (major) 1.5.dp.toPx() else 1.dp.toPx(), cap = androidx.compose.ui.graphics.StrokeCap.Round)
-                }
-            }
-            drawCircle(track, r, c, style = androidx.compose.ui.graphics.drawscope.Stroke(1.5.dp.toPx()))
-            if (sweep.value > 0f) {
-                drawArc(fg, startDeg - 90f, sweep.value, false,
-                    topLeft = androidx.compose.ui.geometry.Offset(c.x - r, c.y - r),
-                    size = androidx.compose.ui.geometry.Size(r * 2, r * 2),
-                    style = androidx.compose.ui.graphics.drawscope.Stroke(stroke, cap = androidx.compose.ui.graphics.StrokeCap.Round))
-                // мітка «зараз» — маленька точка на початку дуги
-                val a = Math.toRadians((startDeg - 90f).toDouble())
-                drawCircle(fg, 3.dp.toPx(), androidx.compose.ui.geometry.Offset(c.x + r * kotlin.math.cos(a).toFloat(), c.y + r * kotlin.math.sin(a).toFloat()))
-            }
-        }
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            if (level.isAlert || level == ua.tryvoga.alarm.AlertLevel.UNKNOWN) StatusDot(level, 8.dp, paused = growing)
-            Text(
-                if (next != null) "%d:%02d".format(h, m) else "—",
-                color = fg, fontSize = 48.sp, fontWeight = FontWeight.Light,
-                style = androidx.compose.ui.text.TextStyle(fontFeatureSettings = "tnum")
-            )
-            Text(
-                when {
-                    next != null -> "до " + java.time.Instant.ofEpochMilli(next.first).atZone(zone)
-                        .format(java.time.format.DateTimeFormatter.ofPattern("HH:mm · EEE", ua.tryvoga.alarm.UK))
-                    alarms.isEmpty() -> ""
-                    else -> "усі вимкнені"
-                },
-                color = dimText(), fontSize = 13.sp
-            )
-        }
-    }
-}
-
-/** Рядок будильника на спільній скляній панелі (перший/останній — із заокругленням). */
-@Composable
-private fun AlarmRow(a: Alarm, index: Int, count: Int, modifier: Modifier, onToggle: (Boolean) -> Unit, onClick: () -> Unit) {
-    val shape = RoundedCornerShape(20.dp)
-    val alpha by animateFloatAsState(if (a.enabled) 1f else 0.45f, androidx.compose.animation.core.tween(180), label = "a")
-    Column(modifier) {
-        GlassSurface(Modifier.fillMaxWidth(), shape = shape, onClick = onClick) {
-            Row(Modifier.padding(start = 18.dp, end = 12.dp, top = 12.dp, bottom = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-                Column(Modifier.weight(1f).graphicsLayer { this.alpha = alpha }) {
-                    Text(
-                        a.timeText, color = onBg(), fontSize = 40.sp, fontWeight = FontWeight.Light,
-                        style = androidx.compose.ui.text.TextStyle(fontFeatureSettings = "tnum")
-                    )
-                    Text(listOf(a.label, a.daysText()).filter { it.isNotBlank() }.joinToString(" · "), color = dimText(), fontSize = 14.sp)
-                    if (a.alertAware) {
-                        fun v(vol: Int, vib: Boolean) = if (vol == 0) (if (vib) "вібро" else "тиша") else "$vol%"
-                        Text(
-                            "Тривога: червона — ${v(a.redVolume, a.redVibrate)}, жовта — ${v(a.yellowVolume, a.yellowVibrate)}",
-                            color = dimText(), fontSize = 13.sp, modifier = Modifier.padding(top = 2.dp)
-                        )
-                        if (a.wakeAfterAllClear) Text("Розбудить після відбою", color = dimText(), fontSize = 13.sp)
-                    }
-                }
-                GlassSwitch(a.enabled, onToggle)
-            }
-        }
-        if (index < count - 1) Spacer(Modifier.height(12.dp))
     }
 }
 
@@ -443,7 +276,7 @@ fun AlarmEditorSheet(alarm: Alarm, isNew: Boolean, onDismiss: () -> Unit, onSave
                     Divider()
                     Column(Modifier.padding(16.dp)) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(Icons.Rounded.Snooze, null, tint = if (isGlass()) dimText() else MaterialTheme.colorScheme.primary)
+                            Icon(Icons.Rounded.Snooze, null, tint = MaterialTheme.colorScheme.primary)
                             Spacer(Modifier.width(10.dp))
                             Text("Відкласти на", color = onBg(), fontSize = 16.sp)
                         }
@@ -455,7 +288,7 @@ fun AlarmEditorSheet(alarm: Alarm, isNew: Boolean, onDismiss: () -> Unit, onSave
 
             // --- режим тривоги ---
             SectionTitle("Режим тривоги")
-            GlassSurface(Modifier.fillMaxWidth(), tint = if (d.alertAware && !isGlass()) AlertRed else Color.Unspecified) {
+            GlassSurface(Modifier.fillMaxWidth(), tint = if (d.alertAware) AlertRed else Color.Unspecified) {
                 Column {
                     SettingRow(Icons.Rounded.Shield, "Враховувати повітряну тривогу", "Тихіше або без звуку під час тривоги на вашій території", iconTint = AlertRed) {
                         GlassSwitch(d.alertAware, { d = d.copy(alertAware = it) }, AlertRed)
@@ -498,13 +331,13 @@ fun AlarmEditorSheet(alarm: Alarm, isNew: Boolean, onDismiss: () -> Unit, onSave
 }
 
 @Composable
-private fun Divider() = HorizontalDivider(Modifier.padding(start = if (isGlass()) 54.dp else 66.dp), color = onBg().copy(alpha = 0.08f))
+private fun Divider() = HorizontalDivider(Modifier.padding(start = 66.dp), color = onBg().copy(alpha = 0.08f))
 
 @Composable
 private fun VolumeRow(icon: androidx.compose.ui.graphics.vector.ImageVector, title: String, value: Int, color: Color, allowZero: Boolean = true, onChange: (Int) -> Unit) {
     Column(Modifier.padding(horizontal = 16.dp, vertical = 10.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Icon(icon, null, tint = if (isGlass() && color == MaterialTheme.colorScheme.primary) dimText() else color)
+            Icon(icon, null, tint = color)
             Spacer(Modifier.width(10.dp))
             Text(title, color = onBg(), fontSize = 16.sp, modifier = Modifier.weight(1f))
             Text(if (value == 0) "Без звуку" else "$value%", color = color, fontWeight = FontWeight.SemiBold)
@@ -539,7 +372,7 @@ private fun LevelBlock(title: String, sub: String, color: Color, volume: Int, vi
         ChoicePills(listOf(0, 20, 50, 100), volume, { if (it == 0) "Тихо" else "$it%" }, onVolume, color)
         Spacer(Modifier.height(8.dp))
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Icon(Icons.Rounded.Vibration, null, tint = if (!isGlass() || vibrate) color else AlertGray, modifier = Modifier.size(20.dp))
+            Icon(Icons.Rounded.Vibration, null, tint = color, modifier = Modifier.size(20.dp))
             Spacer(Modifier.width(10.dp))
             Text("Вібрація", color = onBg(), modifier = Modifier.weight(1f))
             GlassSwitch(vibrate, onVibrate, color)

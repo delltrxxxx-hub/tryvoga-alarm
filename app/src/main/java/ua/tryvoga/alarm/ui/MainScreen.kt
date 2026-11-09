@@ -13,7 +13,6 @@ import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
@@ -111,33 +110,22 @@ fun MainScreen(vm: MainViewModel) {
     val loc = Locations.getOrDefault(settings.locationId)
     val status = snap?.statusOf(loc, settings.partialAs) ?: LocStatus.UNKNOWN
     val ctx = LocalContext.current
-    val glass = isGlass()
-    // кільце «до пробудження» на вкладці будильників згортається при прокручуванні
-    var ringCollapsed by remember { mutableStateOf(false) }
-    val showCountdownInHeader = !glass || tab != Tab.ALARMS || ringCollapsed
 
     AppBackground(status.shownLevel) {
         Column(Modifier.fillMaxSize().statusBarsPadding()) {
-            Header(
-                loc, status, alarms, showCountdownInHeader,
-                settingsSelected = tab == Tab.SETTINGS,
-                onSettings = { tab = if (tab == Tab.SETTINGS) Tab.ALARMS else Tab.SETTINGS },
-            ) { showLoc = true }
+            Header(loc, status, alarms) { showLoc = true }
             Box(Modifier.weight(1f)) {
                 AnimatedContent(
                     targetState = tab,
                     transitionSpec = {
-                        if (glass) fadeIn(tween(160)) togetherWith fadeOut(tween(120))
-                        else {
-                            val dir = if (targetState.ordinal > initialState.ordinal) 1 else -1
-                            (slideInHorizontally(spring(dampingRatio = 0.82f, stiffness = Spring.StiffnessMediumLow)) { it / 3 * dir } + fadeIn(tween(220))) togetherWith
-                                (slideOutHorizontally(spring(dampingRatio = 0.9f, stiffness = Spring.StiffnessMedium)) { -it / 3 * dir } + fadeOut(tween(150)))
-                        }
+                        val dir = if (targetState.ordinal > initialState.ordinal) 1 else -1
+                        (slideInHorizontally(spring(dampingRatio = 0.82f, stiffness = Spring.StiffnessMediumLow)) { it / 3 * dir } + fadeIn(tween(220))) togetherWith
+                            (slideOutHorizontally(spring(dampingRatio = 0.9f, stiffness = Spring.StiffnessMedium)) { -it / 3 * dir } + fadeOut(tween(150)))
                     },
                     label = "tabs"
                 ) { t ->
                     when (t) {
-                        Tab.ALARMS -> AlarmsScreen(alarms, status.shownLevel) { ringCollapsed = it }
+                        Tab.ALARMS -> AlarmsScreen(alarms)
                         Tab.CLOCK -> WorldClockScreen(settings)
                         Tab.TIMER -> TimerScreen()
                         Tab.STOPWATCH -> StopwatchScreen()
@@ -146,13 +134,6 @@ fun MainScreen(vm: MainViewModel) {
                     }
                 }
             }
-        }
-        if (glass) {
-            // м'яке затухання вмісту під нижньою панеллю
-            Box(
-                Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(150.dp)
-                    .background(androidx.compose.ui.graphics.Brush.verticalGradient(listOf(Color.Transparent, MaterialTheme.colorScheme.background)))
-            )
         }
         BottomNav(tab, { tab = it }, Modifier.align(Alignment.BottomCenter))
     }
@@ -175,53 +156,14 @@ fun MainScreen(vm: MainViewModel) {
 }
 
 @Composable
-private fun Header(
-    loc: Loc, status: LocStatus, alarms: List<Alarm>, showCountdown: Boolean,
-    settingsSelected: Boolean = false, onSettings: () -> Unit = {}, onLoc: () -> Unit,
-) {
+private fun Header(loc: Loc, status: LocStatus, alarms: List<Alarm>, onLoc: () -> Unit) {
     val now by produceState(System.currentTimeMillis()) {
         while (true) { value = System.currentTimeMillis(); delay(1000) }
     }
     val next = AlarmScheduler.nextAlarm(alarms, now)
     val shown = status.shownLevel
-    if (isGlass()) {
-      Box(Modifier.fillMaxWidth()) {
-        // налаштування — шестерня праворуч угорі (у нижній панелі лишаються 5 вкладок)
-        IconButton(onClick = onSettings, modifier = Modifier.align(Alignment.TopEnd).padding(top = 4.dp, end = 8.dp)) {
-            Icon(Icons.Rounded.Settings, "Налаштування", tint = if (settingsSelected) onBg() else onBg().copy(alpha = 0.62f))
-        }
-        Column(Modifier.fillMaxWidth().padding(top = 10.dp, bottom = 8.dp, start = 56.dp, end = 56.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-            // територія: тонкий контур, без заливки
-            val shape = RoundedCornerShape(12.dp)
-            Row(
-                Modifier.widthIn(max = 340.dp).clip(shape).border(1.dp, onBg().copy(alpha = 0.22f), shape)
-                    .clickable(onClick = onLoc).padding(start = 12.dp, end = 8.dp, top = 7.dp, bottom = 7.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Icon(Icons.Rounded.Place, null, tint = dimText(), modifier = Modifier.size(16.dp))
-                Spacer(Modifier.width(6.dp))
-                Text(loc.short, color = onBg(), fontWeight = FontWeight.Medium, fontSize = 15.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
-                Icon(Icons.Rounded.KeyboardArrowDown, null, tint = dimText(), modifier = Modifier.size(18.dp))
-            }
-            // статус: крапка + слово кольором статусу, 15sp — головний сигнал екрана
-            Row(Modifier.padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                StatusDot(shown, 9.dp)
-                val c by animateColorAsState(shown.textColor(), tween(600), label = "sc")
-                Text(status.title, color = c, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
-            }
-            status.detail?.let { Text(it, color = dimText(), fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center) }
-            androidx.compose.animation.AnimatedVisibility(showCountdown, enter = fadeIn(tween(180)), exit = fadeOut(tween(120))) {
-                Text(
-                    if (next != null) "До пробудження ${formatCountdown(next.first - now)}" else "Немає активних будильників",
-                    color = dimText(), fontSize = 13.sp, modifier = Modifier.padding(top = 2.dp)
-                )
-            }
-        }
-      }
-        return
-    }
     Column(Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 6.dp, start = 16.dp, end = 16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-        GlassSurface(Modifier.widthIn(max = 340.dp), shape = RoundedCornerShape(22.dp), tint = if (shown.isAlert) shown.color() else Color.Unspecified, onClick = onLoc) {
+        GlassSurface(Modifier.widthIn(max = 340.dp), shape = RoundedCornerShape(16.dp), tint = if (shown.isAlert) shown.color() else Color.Unspecified, onClick = onLoc) {
             Row(Modifier.padding(start = 6.dp, end = 10.dp, top = 6.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
                 StatusDot(shown, 8.dp)
                 Icon(Icons.Rounded.Place, null, tint = onBg(), modifier = Modifier.size(16.dp))
@@ -242,66 +184,25 @@ private fun Header(
 
 @Composable
 private fun BottomNav(tab: Tab, onTab: (Tab) -> Unit, modifier: Modifier) {
-    if (isGlass()) {
-        val items = Tab.entries.filter { it != Tab.SETTINGS }
-        val selIndex = items.indexOf(tab)
-        // суцільна скляна панель; вибрана вкладка — біла іконка, білий підпис і лінія 24×3dp зверху
-        GlassSurface(
-            modifier.navigationBarsPadding().padding(horizontal = 12.dp, vertical = 10.dp).fillMaxWidth().height(70.dp),
-            shape = RoundedCornerShape(18.dp)
-        ) {
-            // панель має бути майже непрозорою: під нею прокручується вміст, і він не повинен просвічувати крізь підписи
-            Box(Modifier.fillMaxSize().background(if (LocalIsDark.current) Color(0xFF0B0B0C) else Color(0xFFF2F3F4)))
-            BoxWithConstraints(Modifier.fillMaxSize()) {
-                val w = maxWidth / items.size
-                val off by animateDpAsState(w * selIndex.coerceAtLeast(0), tween(180, easing = androidx.compose.animation.core.FastOutSlowInEasing), label = "nav")
-                // індикатор усередині панелі, під підписом; на «Налаштуваннях» прихований
-                val indAlpha by animateFloatAsState(if (selIndex >= 0) 1f else 0f, tween(160), label = "ind")
-                Box(
-                    Modifier.align(Alignment.BottomStart).offset(x = off + w / 2 - 12.dp, y = (-7).dp)
-                        .graphicsLayer { alpha = indAlpha }.width(24.dp).height(3.dp).clip(RoundedCornerShape(2.dp)).background(onBg())
-                )
-                Row(Modifier.fillMaxSize()) {
-                    items.forEach { t ->
-                        val sel = t == tab
-                        val c by animateColorAsState(if (sel) onBg() else onBg().copy(alpha = 0.62f), tween(160), label = "nc")
-                        Column(
-                            Modifier.weight(1f).fillMaxHeight()
-                                .clickable(remember { MutableInteractionSource() }, null) { onTab(t) }
-                                .padding(horizontal = 2.dp),
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.Center
-                        ) {
-                            Icon(t.icon, t.label, tint = c, modifier = Modifier.size(22.dp))
-                            Spacer(Modifier.height(4.dp))
-                            Text(t.label, color = c, fontSize = 12.sp, fontWeight = FontWeight.Medium, maxLines = 1)
-                            Spacer(Modifier.height(8.dp))
-                        }
-                    }
-                }
-            }
-        }
-        return
-    }
     val items = Tab.entries
     GlassSurface(
         modifier.navigationBarsPadding().padding(horizontal = 10.dp, vertical = 10.dp).fillMaxWidth().height(70.dp),
-        shape = RoundedCornerShape(35.dp)
+        shape = RoundedCornerShape(24.dp)
     ) {
         if (LocalUiStyle.current == UiStyle.GLASS) {
             Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background.copy(alpha = 0.35f)))
         }
         BoxWithConstraints(Modifier.fillMaxSize().padding(5.dp)) {
             val w = maxWidth / items.size
-            val off by animateDpAsState(w * tab.ordinal, spring(dampingRatio = 0.6f, stiffness = Spring.StiffnessMediumLow), label = "nav")
+            val off by animateDpAsState(w * tab.ordinal, spring(dampingRatio = 0.85f, stiffness = Spring.StiffnessMediumLow), label = "nav")
             Box(
-                Modifier.offset(x = off).width(w).fillMaxHeight().clip(RoundedCornerShape(30.dp))
+                Modifier.offset(x = off).width(w).fillMaxHeight().clip(RoundedCornerShape(18.dp))
                     .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.22f))
             )
             Row(Modifier.fillMaxSize()) {
                 items.forEach { t ->
                     val sel = t == tab
-                    val sc by animateFloatAsState(if (sel) 1.15f else 1f, bouncy(), label = "ic")
+                    val sc by animateFloatAsState(if (sel) 1.06f else 1f, bouncy(), label = "ic")
                     val c by animateColorAsState(if (sel) MaterialTheme.colorScheme.primary else dimText(), label = "nc")
                     Column(
                         Modifier.weight(1f).fillMaxHeight()
@@ -327,7 +228,7 @@ private fun BottomNav(tab: Tab, onTab: (Tab) -> Unit, modifier: Modifier) {
 fun sheetColor(): Color {
     val dark = LocalIsDark.current
     return if (LocalUiStyle.current == UiStyle.GLASS) {
-        if (dark) Color(0xFF111214) else Color(0xFFF4F5F6)
+        if (dark) Color(0xFF121733) else Color(0xFFF4F6FF)
     } else MaterialTheme.colorScheme.surfaceContainerHigh
 }
 

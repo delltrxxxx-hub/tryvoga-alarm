@@ -100,7 +100,7 @@ private fun RingScreen(info: AlarmService.RingInfo, onDismiss: () -> Unit, onSno
     var now by remember { mutableStateOf(LocalTime.now()) }
     LaunchedEffect(Unit) { while (true) { now = LocalTime.now(); delay(1000) } }
     val t = rememberInfiniteTransition(label = "ring")
-    val wobble by t.animateFloat(-8f, 8f, infiniteRepeatable(tween(120), RepeatMode.Reverse), label = "w")
+    val wobble by t.animateFloat(-3f, 3f, infiniteRepeatable(tween(140), RepeatMode.Reverse), label = "w")
     val breathe by t.animateFloat(0.96f, 1.04f, infiniteRepeatable(tween(1400), RepeatMode.Reverse), label = "b")
 
     AppBackground(if (info.mode == AlarmService.MODE_AFTER_CLEAR) AlertLevel.NONE else info.level) {
@@ -110,48 +110,34 @@ private fun RingScreen(info: AlarmService.RingInfo, onDismiss: () -> Unit, onSno
         ) {
             Spacer(Modifier.height(40.dp))
             Text(info.title, color = onBg(), fontSize = 22.sp, fontWeight = FontWeight.Medium)
-            val glass = isGlass()
             Text(
-                now.format(DateTimeFormatter.ofPattern("HH:mm")), color = onBg(), fontSize = 96.sp,
-                fontWeight = if (glass) FontWeight.Light else FontWeight.Thin,
-                style = androidx.compose.ui.text.TextStyle(fontFeatureSettings = "tnum"),
-                modifier = Modifier.graphicsLayer { if (!glass) { scaleX = breathe; scaleY = breathe } }
+                now.format(DateTimeFormatter.ofPattern("HH:mm")), color = onBg(), fontSize = 96.sp, fontWeight = FontWeight.Thin,
+                modifier = Modifier.graphicsLayer { scaleX = breathe; scaleY = breathe }
             )
             Spacer(Modifier.height(12.dp))
-            val level = if (info.mode == AlarmService.MODE_AFTER_CLEAR) AlertLevel.NONE else info.level
             val accent = when {
                 info.mode == AlarmService.MODE_AFTER_CLEAR -> AlertGreen
                 info.level.isAlert -> info.level.color()
                 else -> MaterialTheme.colorScheme.primary
             }
-            if (glass) {
-                // статус: крапка + слово, 18sp — найважливіше після часу
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    StatusDot(level, 10.dp)
-                    Text(info.subtitle, color = if (level.isAlert || info.mode == AlarmService.MODE_AFTER_CLEAR) level.textColor() else onBg(), fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
-                }
-                if (info.quieted) Text(if (info.volume == 0) "Лише вібрація через тривогу" else "Гучність знижено до ${info.volume}%", color = dimText(), fontSize = 14.sp, modifier = Modifier.padding(top = 4.dp))
-                Spacer(Modifier.weight(1f))
-            } else {
-                GlassSurface(tint = accent, shape = RoundedCornerShape(22.dp)) {
-                    Row(Modifier.padding(horizontal = 16.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Rounded.Shield, null, tint = accent)
-                        Spacer(Modifier.width(10.dp))
-                        Column {
-                            Text(info.subtitle, color = onBg(), fontWeight = FontWeight.SemiBold)
-                            if (info.quieted) Text(if (info.volume == 0) "Лише вібрація через тривогу" else "Гучність знижено до ${info.volume}%", color = dimText(), fontSize = 13.sp)
-                        }
+            GlassSurface(tint = accent, shape = RoundedCornerShape(22.dp)) {
+                Row(Modifier.padding(horizontal = 16.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Rounded.Shield, null, tint = accent)
+                    Spacer(Modifier.width(10.dp))
+                    Column {
+                        Text(info.subtitle, color = onBg(), fontWeight = FontWeight.SemiBold)
+                        if (info.quieted) Text(if (info.volume == 0) "Лише вібрація через тривогу" else "Гучність знижено до ${info.volume}%", color = dimText(), fontSize = 13.sp)
                     }
                 }
-                Spacer(Modifier.weight(1f))
-                Box(Modifier.size(140.dp).graphicsLayer { rotationZ = wobble }, contentAlignment = Alignment.Center) {
-                    Box(Modifier.size(140.dp).graphicsLayer { scaleX = breathe * 1.1f; scaleY = breathe * 1.1f; alpha = 0.3f }.clip(CircleShape).background(accent))
-                    GlassSurface(Modifier.size(110.dp), shape = CircleShape, tint = accent) {
-                        Icon(Icons.Rounded.AlarmOff, null, tint = onBg(), modifier = Modifier.size(52.dp).align(Alignment.Center))
-                    }
-                }
-                Spacer(Modifier.weight(1f))
             }
+            Spacer(Modifier.weight(1f))
+            Box(Modifier.size(140.dp).graphicsLayer { rotationZ = wobble }, contentAlignment = Alignment.Center) {
+                Box(Modifier.size(140.dp).graphicsLayer { scaleX = breathe * 1.1f; scaleY = breathe * 1.1f; alpha = 0.3f }.clip(CircleShape).background(accent))
+                GlassSurface(Modifier.size(110.dp), shape = CircleShape, tint = accent) {
+                    Icon(Icons.Rounded.AlarmOff, null, tint = onBg(), modifier = Modifier.size(52.dp).align(Alignment.Center))
+                }
+            }
+            Spacer(Modifier.weight(1f))
             if (info.canSnooze) {
                 GlassButton("Відкласти", onSnooze, Modifier.fillMaxWidth(0.7f), Icons.Rounded.Snooze)
                 Spacer(Modifier.height(16.dp))
@@ -168,25 +154,22 @@ private fun SlideToDismiss(accent: Color, onDismiss: () -> Unit) {
     val scope = rememberCoroutineScope()
     val offset = remember { Animatable(0f) }
     val density = LocalDensity.current
-    val glass = isGlass()
-    val thumbColor = if (glass) MaterialTheme.colorScheme.primary else accent
-    val thumbIcon = if (glass) MaterialTheme.colorScheme.onPrimary else Color.White
-    GlassSurface(Modifier.fillMaxWidth().height(if (glass) 64.dp else 72.dp), shape = RoundedCornerShape(if (glass) 32.dp else 36.dp), elevated = true) {
-        BoxWithConstraints(Modifier.fillMaxSize().padding(4.dp)) {
-            val thumb = if (glass) 56.dp else 60.dp
+    GlassSurface(Modifier.fillMaxWidth().height(72.dp), shape = RoundedCornerShape(36.dp)) {
+        BoxWithConstraints(Modifier.fillMaxSize().padding(6.dp)) {
+            val thumb = 60.dp
             val maxPx = with(density) { (maxWidth - thumb).toPx() }
             Text(
                 "Проведіть, щоб вимкнути  ›››", Modifier.align(Alignment.Center).graphicsLayer { alpha = 1f - (offset.value / maxPx).coerceIn(0f, 1f) },
                 color = dimText(), fontWeight = FontWeight.Medium
             )
             Box(
-                Modifier.offset { IntOffset(offset.value.roundToInt(), 0) }.size(thumb).clip(CircleShape).background(thumbColor)
+                Modifier.offset { IntOffset(offset.value.roundToInt(), 0) }.size(thumb).clip(CircleShape).background(accent)
                     .pointerInput(maxPx) {
                         detectHorizontalDragGestures(
                             onDragEnd = {
                                 scope.launch {
                                     if (offset.value > maxPx * 0.7f) { offset.animateTo(maxPx, spring()); onDismiss() }
-                                    else offset.animateTo(0f, spring(dampingRatio = if (glass) 1f else 0.4f, stiffness = 300f))
+                                    else offset.animateTo(0f, spring(dampingRatio = 0.4f, stiffness = 300f))
                                 }
                             },
                             onHorizontalDrag = { change, drag ->
@@ -196,7 +179,7 @@ private fun SlideToDismiss(accent: Color, onDismiss: () -> Unit) {
                         )
                     },
                 contentAlignment = Alignment.Center
-            ) { Icon(Icons.Rounded.AlarmOff, null, tint = thumbIcon) }
+            ) { Icon(Icons.Rounded.AlarmOff, null, tint = Color.White) }
         }
     }
 }

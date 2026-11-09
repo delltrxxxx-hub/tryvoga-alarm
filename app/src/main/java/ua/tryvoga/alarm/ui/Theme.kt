@@ -32,39 +32,32 @@ fun AlertLevel.color(): Color = when (this) {
     AlertLevel.UNKNOWN -> AlertGray
 }
 
-// «Кристал циферблата»: чорне скло, білі лінії; колір — лише статуси тривоги (див. AlertRed тощо).
 private val GlassDark = darkColorScheme(
-    primary = Color(0xFFFFFFFF),
-    onPrimary = Color(0xFF000000),
-    secondary = Color(0x99FFFFFF),
-    onSecondary = Color(0xFF000000),
-    tertiary = Color(0xFFFFFFFF),
-    background = Color(0xFF000000),
-    onBackground = Color(0xFFFFFFFF),
-    surface = Color(0xFF0E0F10),
-    onSurface = Color(0xFFFFFFFF),
-    onSurfaceVariant = Color(0xB3FFFFFF), // 70%
-    surfaceVariant = Color(0xFF1A1B1D),
-    surfaceContainerHigh = Color(0xFF141517),
-    outline = Color(0x33FFFFFF),
-    outlineVariant = Color(0x1FFFFFFF),
+    primary = Color(0xFF8AB4FF),
+    onPrimary = Color(0xFF041A3F),
+    secondary = Color(0xFFC4A1FF),
+    tertiary = Color(0xFF7DE3F4),
+    background = Color(0xFF070B1A),
+    onBackground = Color(0xFFF2F4FF),
+    surface = Color(0xFF111631),
+    onSurface = Color(0xFFF2F4FF),
+    onSurfaceVariant = Color(0xFFB7BDD8),
+    surfaceContainerHigh = Color(0xFF1A2042),
+    outline = Color(0x55FFFFFF),
 )
 
 private val GlassLight = lightColorScheme(
-    primary = Color(0xFF0B0C0E),
-    onPrimary = Color(0xFFFFFFFF),
-    secondary = Color(0x990B0C0E),
-    onSecondary = Color(0xFFFFFFFF),
-    tertiary = Color(0xFF0B0C0E),
-    background = Color(0xFFE8E9EB),
-    onBackground = Color(0xFF0B0C0E),
-    surface = Color(0xFFF4F5F6),
-    onSurface = Color(0xFF0B0C0E),
-    onSurfaceVariant = Color(0xB30B0C0E), // 70%
-    surfaceVariant = Color(0xFFDCDDE0),
-    surfaceContainerHigh = Color(0xFFF4F5F6),
-    outline = Color(0x330B0C0E),
-    outlineVariant = Color(0x140B0C0E),
+    primary = Color(0xFF2F5BEA),
+    onPrimary = Color.White,
+    secondary = Color(0xFF7C4DFF),
+    tertiary = Color(0xFF0891B2),
+    background = Color(0xFFE9EEFF),
+    onBackground = Color(0xFF111528),
+    surface = Color(0xFFF7F8FF),
+    onSurface = Color(0xFF111528),
+    onSurfaceVariant = Color(0xFF4F5672),
+    surfaceContainerHigh = Color(0xFFFFFFFF),
+    outline = Color(0x33000000),
 )
 
 private val M3Dark = darkColorScheme(primary = Color(0xFFA8C7FA), secondary = Color(0xFFC2C7CF), tertiary = Color(0xFFD7BDE4))

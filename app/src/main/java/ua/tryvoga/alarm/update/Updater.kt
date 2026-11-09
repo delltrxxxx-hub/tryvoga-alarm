@@ -10,6 +10,7 @@ import android.os.Build
 import android.provider.Settings
 import androidx.core.content.IntentCompat
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -21,7 +22,8 @@ import java.io.IOException
 import java.net.HttpURLConnection
 import java.net.URL
 
-data class UpdateInfo(val version: String, val notes: String, val apkUrl: String, val size: Long)
+/** apiUrl — адреса файлу через API GitHub (надійніша), apkUrl — пряме посилання (запасне). */
+data class UpdateInfo(val version: String, val notes: String, val apkUrl: String, val size: Long, val apiUrl: String = "")
 
 sealed interface UpdateState {
     data object Idle : UpdateState
@@ -30,7 +32,8 @@ sealed interface UpdateState {
     data class Available(val info: UpdateInfo) : UpdateState
     data class Downloading(val info: UpdateInfo, val progress: Float) : UpdateState
     data object Installing : UpdateState
-    data class Error(val message: String) : UpdateState
+    /** [info] є, якщо можна одразу спробувати ще раз. */
+    data class Error(val message: String, val info: UpdateInfo? = null) : UpdateState
 }
 
 /**
@@ -85,6 +88,7 @@ object Updater {
                         notes = o.optString("body").trim(),
                         apkUrl = a.getString("browser_download_url"),
                         size = a.optLong("size"),
+                        apiUrl = a.optString("url"),
                     )
                 }
             }
@@ -103,44 +107,80 @@ object Updater {
         )
     }
 
-    suspend fun downloadAndInstall(ctx: Context, info: UpdateInfo) {
-        try {
-            val file = File(ctx.cacheDir, "update.apk")
-            withContext(Dispatchers.IO) {
-                var url = URL(info.apkUrl)
-                var c: HttpURLConnection
-                var redirects = 0
-                while (true) { // GitHub віддає файл через перенаправлення
-                    c = url.openConnection() as HttpURLConnection
-                    c.instanceFollowRedirects = false
-                    c.connectTimeout = 10000; c.readTimeout = 20000
-                    c.setRequestProperty("User-Agent", "TryvogaAlarm/${BuildConfig.VERSION_NAME}")
-                    val code = c.responseCode
-                    if (code in 300..399 && redirects++ < 5) { url = URL(url, c.getHeaderField("Location")); c.disconnect(); continue }
-                    if (code !in 200..299) throw IOException("HTTP $code")
-                    break
-                }
-                val total = c.contentLengthLong.takeIf { it > 0 } ?: info.size
-                c.inputStream.use { input ->
-                    file.outputStream().use { out ->
-                        val buf = ByteArray(64 * 1024)
-                        var done = 0L
-                        while (true) {
-                            val n = input.read(buf); if (n < 0) break
-                            out.write(buf, 0, n); done += n
-                            if (total > 0) _state.value = UpdateState.Downloading(info, done.toFloat() / total)
-                        }
-                    }
-                }
-                c.disconnect()
+    /** Відкрити з'єднання, самостійно пройти перенаправлення GitHub (до 5). */
+    private fun open(start: String, accept: String?): HttpURLConnection {
+        var url = URL(start)
+        var redirects = 0
+        while (true) {
+            val c = url.openConnection() as HttpURLConnection
+            c.instanceFollowRedirects = false
+            c.connectTimeout = 15000; c.readTimeout = 30000
+            c.setRequestProperty("User-Agent", "TryvogaAlarm/${BuildConfig.VERSION_NAME}")
+            // заголовок Accept потрібен лише API GitHub; підписаному сховищу файлів його не передаємо
+            if (accept != null && redirects == 0) c.setRequestProperty("Accept", accept)
+            val code = c.responseCode
+            if (code in 300..399 && redirects++ < 5) {
+                val loc = c.getHeaderField("Location"); c.disconnect()
+                url = URL(url, loc); continue
             }
-            _state.value = UpdateState.Installing
-            withContext(Dispatchers.IO) { install(ctx, file) }
-        } catch (e: Exception) {
-            _state.value = UpdateState.Error("Помилка оновлення: ${e.message}")
+            if (code !in 200..299) { c.disconnect(); throw IOException("HTTP $code") }
+            return c
         }
     }
 
+    /**
+     * Завантажити APK. Порядок: API GitHub → пряме посилання; кожне джерело до 3 спроб
+     * з паузою 1 / 3 с (GitHub інколи віддає 502/503/504 на свіжі релізи).
+     */
+    suspend fun downloadAndInstall(ctx: Context, info: UpdateInfo) {
+        val file = File(ctx.cacheDir, "update.apk")
+        val sources = buildList {
+            if (info.apiUrl.isNotBlank()) add(info.apiUrl to "application/octet-stream")
+            add(info.apkUrl to null)
+        }
+        var lastError: Exception? = null
+        _state.value = UpdateState.Downloading(info, 0f)
+        for ((src, accept) in sources) {
+            for (attempt in 0 until 3) {
+                try {
+                    withContext(Dispatchers.IO) {
+                        val c = open(src, accept)
+                        try {
+                            val total = c.contentLengthLong.takeIf { it > 0 } ?: info.size
+                            c.inputStream.use { input ->
+                                file.outputStream().use { out ->
+                                    val buf = ByteArray(64 * 1024)
+                                    var done = 0L
+                                    while (true) {
+                                        val n = input.read(buf); if (n < 0) break
+                                        out.write(buf, 0, n); done += n
+                                        if (total > 0) _state.value = UpdateState.Downloading(info, done.toFloat() / total)
+                                    }
+                                }
+                            }
+                            if (info.size > 0 && file.length() != info.size) throw IOException("файл завантажено не повністю")
+                        } finally { c.disconnect() }
+                    }
+                    _state.value = UpdateState.Installing
+                    try {
+                        withContext(Dispatchers.IO) { install(ctx, file) }
+                    } catch (e: Exception) {
+                        _state.value = UpdateState.Error("Не вдалося встановити: ${e.message}", info)
+                    }
+                    return
+                } catch (e: Exception) {
+                    lastError = e
+                    // 4xx (крім 408/429) — повтор не допоможе, переходимо до іншого джерела
+                    val code = Regex("HTTP (\\d+)").find(e.message ?: "")?.groupValues?.get(1)?.toIntOrNull()
+                    if (code != null && code in 400..499 && code != 408 && code != 429) break
+                    if (attempt < 2) delay(if (attempt == 0) 1000 else 3000)
+                }
+            }
+        }
+        _state.value = UpdateState.Error(
+            "Сервер GitHub зараз не віддає файл (${lastError?.message}). Спробуйте ще раз за хвилину.", info
+        )
+    }
     private fun install(ctx: Context, apk: File) {
         val installer = ctx.packageManager.packageInstaller
         val params = PackageInstaller.SessionParams(PackageInstaller.SessionParams.MODE_FULL_INSTALL).apply {
